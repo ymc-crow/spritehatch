@@ -76,17 +76,25 @@ def walk(view: str) -> list[dict]:
             })
         else:
             lift_r, lift_l = max(0.0, s), max(0.0, -s)
+            # The character's left is screen right from the front, screen
+            # left from the back.
+            toward_left = 1 if view == "down" else -1
             poses.append({
                 # Seen from the front, a leg stepping toward the camera looks
                 # shorter: its foot rises while its top stays under the skirt.
                 # (Lifting the whole leg hid it behind the hips, and turning
                 # hips and chest a few degrees tore holes in a 48 px body.)
+                # (Shortening the swinging arms the same way frayed arm and
+                # cape edges.)
                 "squash": {"leg_r": 1 - 0.25 * lift_r, "leg_l": 1 - 0.25 * lift_l},
                 # small swings: a cape hanging behind the arms moves with them
                 "arm_r": 2 + 4 * lift_l, "arm_l": 2 + 4 * lift_r,
                 "hand_r": 6, "hand_l": 6,
-                # the body dips a pixel when a foot lands and rises as the legs pass
-                "shift": {"torso": (0, 1 if abs(s) > 0.9 else 0)},
+                # The body is low when a foot lands and high as the legs pass,
+                # a pixel each way: the bob is what reads as walking at 48px.
+                "shift": {"torso": (0, 1 if abs(s) > 0.9 else -1 if abs(s) < 0.1 else 0)},
+                # and leans its weight over the foot on the ground
+                "root": (toward_left * round(s), 0),
             })
     return poses
 
