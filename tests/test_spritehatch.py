@@ -942,3 +942,48 @@ def test_four_legged_walk_moves_the_legs_not_the_body():
     hop = render(still, "right", "walk")
     trot = render(still, "right", "walk", quadruped=True)
     assert len(trot) == len(hop) and all(f.size == hop[0].size for f in trot)
+
+
+def _face_hits(view, motion, size=80):
+    """Per frame: effect pixels drawn in front of the face (the stick figure's
+    blue head below its top third; in a profile only its front half)."""
+    from spritehatch.moves import render
+
+    still, pts = _stick_figure(view, size)
+    layers: list = []
+    bodies = render(still, pts, view, motion, effects=layers)
+    hits = []
+    for body, (_, front) in zip(bodies, layers):
+        b = np.asarray(body)
+        head = (b[..., 3] > 0) & (b[..., 2] > 150) & (b[..., 0] < 120)
+        ys = np.nonzero(head.any(axis=1))[0]
+        head[: ys.min() + (ys.max() - ys.min()) // 3] = False
+        if view == "right":
+            xs = np.nonzero(head.any(axis=0))[0]
+            head[:, : (xs.min() + xs.max()) // 2] = False
+        hits.append(int(((np.asarray(front)[..., 3] > 0) & head).sum()))
+    return hits
+
+
+def test_sword_and_magic_stay_off_the_face():
+    for view in ("down", "right"):
+        for motion in ("attack", "cast"):
+            assert max(_face_hits(view, motion)) <= 3, (view, motion, _face_hits(view, motion))
+
+
+def test_side_attack_strikes_forward():
+    """The frames with a slash trail point the blade ahead, not behind the back."""
+    from spritehatch.moves import _sword_layer, attack, canvas_size, make_rig
+
+    still, pts = _stick_figure("right", 80)
+    rig = make_rig(still, pts, "right", canvas_size(80))
+    state: dict = {}
+    for pose in attack("right"):
+        _, world = rig.render(pose)
+        layer = np.asarray(_sword_layer(rig, world, "right", state, pose))
+        if pose.get("trail"):
+            shoulder = rig.point(world, "arm_r", 2)
+            blade = (layer[..., 3] > 0) & (layer[..., 0] > 200) & (layer[..., 1] > 200)
+            xs = np.nonzero(blade.any(axis=0))[0]
+            assert xs.max() > shoulder[0] + 8 and xs.mean() > shoulder[0]
+

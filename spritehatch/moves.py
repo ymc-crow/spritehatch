@@ -7,6 +7,8 @@ body height to raise it), "root" and effect keys that
 render() handles after the body is drawn:
 
     sword   draw the sword in the right hand
+    blade   screen direction of that sword in degrees (0 right, -90 up);
+            without it the blade follows the forearm
     trail   slash trail from the sword's previous position
     orb     (radius, travel) glowing orb between the hands, flying forward
     ring    magic ring at the feet with this alpha
@@ -92,25 +94,32 @@ def walk(view: str) -> list[dict]:
 def attack(view: str) -> list[dict]:
     if _side(view):
         stance = {"leg_r": 12, "leg_l": -12}
+        # Overhead chop: the hand goes up over the head (not across the face),
+        # the blade drops behind the back, then comes over the top and ends
+        # pointing ahead and down. The blade direction is set per frame:
+        # following the forearm, a raised arm points it backward.
         keys = [
             {**stance, "arm_r": 30, "hand_r": 30, "arm_l": 15, "hand_l": 20},
-            {**stance, "torso": -4, "head": -2, "arm_r": 150, "hand_r": 30, "arm_l": -10},
-            {**stance, "torso": -7, "head": -3, "arm_r": 205, "hand_r": 35, "arm_l": -25,
-             "leg_r": 18, "foot_r": -15},
-            {"torso": 6, "arm_r": 120, "hand_r": 10, "arm_l": 20, "leg_r": 30, "foot_r": -5,
-             "leg_l": -25, "foot_l": -20, "trail": True},
-            {"torso": 10, "head": 3, "arm_r": 55, "hand_r": 0, "arm_l": 35, "leg_r": 34,
-             "foot_r": -8, "leg_l": -30, "foot_l": -25, "trail": True},
-            {"torso": 8, "head": 2, "arm_r": 25, "hand_r": -10, "arm_l": 30, "leg_r": 30,
-             "leg_l": -26, "foot_l": -20},
+            {**stance, "torso": -4, "head": -2, "arm_r": 205, "hand_r": 15, "arm_l": -10,
+             "blade": -135},
+            {**stance, "torso": -7, "head": -3, "arm_r": 230, "hand_r": 25, "arm_l": -25,
+             "leg_r": 18, "foot_r": -15, "blade": 160},
+            {"torso": 6, "arm_r": 105, "hand_r": 10, "arm_l": 20, "leg_r": 30, "foot_r": -5,
+             "leg_l": -25, "foot_l": -20, "trail": True, "blade": -30},
+            {"torso": 10, "head": 3, "arm_r": 70, "hand_r": 0, "arm_l": 35, "leg_r": 34,
+             "foot_r": -8, "leg_l": -30, "foot_l": -25, "trail": True, "blade": 25},
+            {"torso": 8, "head": 2, "arm_r": 40, "hand_r": -10, "arm_l": 30, "leg_r": 30,
+             "leg_l": -26, "foot_l": -20, "blade": 55},
             {"torso": 3, "arm_r": 30, "hand_r": 20, "arm_l": 20, "leg_r": 20, "leg_l": -15},
             {**stance, "arm_r": 30, "hand_r": 30, "arm_l": 15, "hand_l": 20},
         ]
     else:
+        # The sword goes up beside the head, on the sword arm's side; raised
+        # over the head it crossed the face.
         keys = [
             {"arm_r": 20, "hand_r": 20},
-            {"arm_r": 120, "hand_r": 20, "torso": -4, "arm_l": 10},
-            {"arm_r": 165, "hand_r": 25, "torso": -7, "head": -3, "arm_l": 18},
+            {"arm_r": 100, "hand_r": 20, "torso": -4, "arm_l": 10},
+            {"arm_r": 125, "hand_r": 30, "torso": -7, "head": -3, "arm_l": 18},
             {"arm_r": 70, "hand_r": 0, "torso": 4, "arm_l": 8, "trail": True},
             {"arm_r": -35, "hand_r": -20, "torso": 8, "head": 3, "arm_l": 4, "trail": True},
             {"arm_r": -45, "hand_r": -25, "torso": 6, "head": 2},
@@ -223,7 +232,9 @@ def _sword_layer(rig: Rig, world: dict, view: str, state: dict, pose: dict) -> I
     elbow = rig.point(world, "hand_r", 3)
     shoulder = rig.point(world, "arm_r", 2)
     length = rig.height * 0.34
-    deg = _angle(elbow, hand) + GRIP[view]
+    # "blade" fixes the screen direction (0 ahead for a profile, -90 up);
+    # otherwise the sword follows the forearm.
+    deg = pose["blade"] if "blade" in pose else _angle(elbow, hand) + GRIP[view]
     ux, uy = fx.unit(deg)
     tip = (hand[0] + ux * length, hand[1] + uy * length)
     tip_deg = _angle(shoulder, tip)
@@ -231,7 +242,12 @@ def _sword_layer(rig: Rig, world: dict, view: str, state: dict, pose: dict) -> I
     if pose.get("trail") and "tip" in state:
         prev = state["tip"]
         turn = (tip_deg - prev + 180) % 360 - 180
-        fx.trail(draw, shoulder, tip_deg - turn, tip_deg, reach * 0.7, reach + 1)
+        start = tip_deg - turn
+        if view == "right" and turn > 0:
+            # A chop coming over the top: the slash starts straight up, so it
+            # never sweeps across the head.
+            start = max(start, -90)
+        fx.trail(draw, shoulder, start, tip_deg, reach * 0.7, reach + 1)
     fx.sword(layer, hand, deg, length, scale=_fx_scale(rig))
     state["tip"] = tip_deg
     return layer
@@ -248,7 +264,20 @@ def _magic(rig: Rig, world: dict, view: str, pose: dict, i: int):
         radius, travel = (v * k for v in pose["orb"])
         hands = (rig.point(world, "hand_r", "wrist_r") + rig.point(world, "hand_l", "wrist_l")) / 2
         fxd, fyd = FORWARD[view]
-        center = (hands[0] + fxd * (3 * k + travel), hands[1] + fyd * travel - radius)
+        # The orb grows clear of the head: between raised hands it sat on the face.
+        mark = rig.point(world, "head", "top")
+        head_top = mark[1] - (rig.pts["top"][1] - rig.top)
+        above = head_top - radius - 2 * k
+        if view == "down":
+            # Thrown at the camera: it swells above the head instead of
+            # flying down across the face and body.
+            radius += travel / 14
+            center, travel = (mark[0], max(radius + 1, head_top - radius - 2 * k)), 0
+        elif travel:
+            center = (hands[0] + fxd * (3 * k + travel), hands[1] + fyd * travel - radius)
+        else:
+            x = mark[0] if view == "up" else hands[0] + fxd * 3 * k
+            center = (x, min(hands[1] - radius, above))
         d = ImageDraw.Draw(back if view == "up" else front)
         if travel:
             d.line([(center[0] - fxd * travel, center[1] - fyd * travel), center],
