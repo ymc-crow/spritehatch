@@ -159,7 +159,11 @@ def redraw(frames: list[Image.Image], keypoints: list, *, still: Image.Image,
         painted = client.run(wf)[0]
         for rig, new, p in zip(part, split_grid(painted, len(part), part[0].width, colors,
                                                    still.width), pts):
-            keep = p is None or _area(new) < 0.5 * _area(rig) or _lying(rig)
+            # A tipped-over body keeps the rig frame like a lying one: the
+            # model repaints its face, and the head guard below needs a
+            # standing body to find the head.
+            keep = (p is None or _area(new) < 0.5 * _area(rig) or _lying(rig)
+                    or _standing(p) is False)
             if not keep:
                 new = _keep_head(rig, _patch_holes(rig, new), p)
             out.append(rig if keep else new)
@@ -170,17 +174,22 @@ def _keep_head(rig: Image.Image, new: Image.Image, pts: list) -> Image.Image:
     """The model often paints the face away (a closed visor, no eyes). Above
     the neck, use the rig frame, which is the standing sprite's head, so the
     face stays and is the same in every frame."""
-    if pts[1] is None or pts[8] is None or pts[11] is None:
-        return new
     # Only while standing: on a tipped-over body "above the neck" is not the head.
-    hip = (pts[8][0] + pts[11][0]) / 2, (pts[8][1] + pts[11][1]) / 2
-    if abs(hip[0] - pts[1][0]) > 0.5 * abs(hip[1] - pts[1][1]):
+    if not _standing(pts):
         return new
     r, n = np.asarray(rig), np.asarray(new).copy()
     above = np.zeros(r.shape[:2], bool)
     above[:max(0, round(pts[1][1]))] = True
     n[above] = r[above]
     return Image.fromarray(n)
+
+
+def _standing(pts: list) -> bool | None:
+    """Is the neck above the hips (not tipped over)? None without those points."""
+    if pts[1] is None or pts[8] is None or pts[11] is None:
+        return None
+    hip = (pts[8][0] + pts[11][0]) / 2, (pts[8][1] + pts[11][1]) / 2
+    return abs(hip[0] - pts[1][0]) <= 0.5 * abs(hip[1] - pts[1][1])
 
 
 def _patch_holes(rig: Image.Image, new: Image.Image) -> Image.Image:

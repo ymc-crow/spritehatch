@@ -1039,3 +1039,13 @@ def test_falling_head_is_pasted_whole_upright_or_a_quarter_turn():
     assert np.array_equal(turned[ys.min():ys.max() + 1, xs.min():xs.max() + 1],
                           want[wy.min():wy.max() + 1, wx.min():wx.max() + 1])
 
+
+def test_redraw_knows_a_tipped_body():
+    from spritehatch.redraw import _standing
+
+    pts = [None] * 18
+    pts[1], pts[8], pts[11] = (10, 5), (9, 20), (11, 20)
+    assert _standing(pts) is True
+    pts[1] = (20, 12)                                 # neck far to the side
+    assert _standing(pts) is False
+    assert _standing([None] * 18) is None
