@@ -1020,3 +1020,22 @@ def test_redraw_key_frames_keep_the_slash_and_the_fall():
             if motion == "death":
                 assert any(0 < abs(p.get("fall", 0)) < 90 for p in picked)
                 assert picked[-1].get("dark")
+
+
+def test_falling_head_is_pasted_whole_upright_or_a_quarter_turn():
+    from spritehatch.moves import _paste_head
+
+    head = np.zeros((20, 20, 4), np.uint8)
+    head[2:8, 6:10] = (200, 50, 50, 255)
+    head[3, 7] = (0, 0, 0, 255)                       # an eye
+    blank = Image.new("RGBA", (20, 20))
+    same = np.asarray(_paste_head(blank, head, (8, 8), (8, 8), 0))
+    assert np.array_equal(same, head)
+    turned = np.asarray(_paste_head(blank, head, (8, 8), (12, 10), 90))[..., 3] > 0
+    want = np.rot90(head[..., 3] > 0, k=-1)           # clockwise on screen
+    ys, xs = np.nonzero(turned)
+    wy, wx = np.nonzero(want)
+    assert turned.sum() == want.sum()
+    assert np.array_equal(turned[ys.min():ys.max() + 1, xs.min():xs.max() + 1],
+                          want[wy.min():wy.max() + 1, wx.min():wx.max() + 1])
+

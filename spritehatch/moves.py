@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 from . import effects as fx
@@ -329,6 +330,23 @@ def _turn(p, deg: float, pivot, shift) -> tuple:
             pivot[1] + dx * math.sin(a) + dy * math.cos(a) + shift[1])
 
 
+def _paste_head(img: Image.Image, head: np.ndarray, neck, to, quarter: int) -> Image.Image:
+    """Draw the head texture (its pixels where they are in the standing
+    sprite) on top of img, turned `quarter` degrees clockwise (a multiple of
+    90) around its neck point, with the neck put at `to`. Whole pixels only."""
+    ys, xs = np.nonzero(head[..., 3] > 0)
+    dx, dy = xs - math.floor(neck[0]), ys - math.floor(neck[1])
+    turns = (quarter // 90) % 4
+    for _ in range(turns):          # one clockwise quarter turn on screen
+        dx, dy = -dy, dx
+    nx, ny = math.floor(to[0]) + dx, math.floor(to[1]) + dy
+    out = np.asarray(img).copy()
+    h, w = out.shape[:2]
+    ok = (nx >= 0) & (nx < w) & (ny >= 0) & (ny < h)
+    out[ny[ok], nx[ok]] = head[ys[ok], xs[ok]]
+    return Image.fromarray(out)
+
+
 def with_effects(body: Image.Image, layers: tuple) -> Image.Image:
     back, front = layers
     return Image.alpha_composite(Image.alpha_composite(back, body), front)
@@ -380,7 +398,17 @@ def render(still: Image.Image, skeleton, direction: str, motion: str,
             # puts it back on the floor afterwards anyway.
             x0, y0, x1, y1 = fx.box(body)
             pivot = ((x0 + x1) / 2, (y0 + y1) / 2)
-            body = fx.rotate(body, -pose["fall"], pivot)
+            # The head is left out of the turn and put back on the turned neck
+            # upright or a whole quarter turn over: a 48px face turned 30 or
+            # 65 degrees breaks into stairs, a quarter turn moves whole pixels.
+            rest = rig.render(pose, skip=("head",))[0]
+            if effects is None:
+                rest = Image.alpha_composite(Image.alpha_composite(back, rest), front)
+            body = fx.rotate(rest, -pose["fall"], pivot)
+            quarter = 90 * round(pose["fall"] / 90)
+            neck = rig.point(world, "head", 1)
+            body = _paste_head(body, rig.parts["head"], rig.pts[1],
+                               _turn(neck, pose["fall"], pivot, (0, 0)), quarter)
             # Slide toward the middle while falling so the body stays in frame.
             x0, y0, x1, _ = fx.box(body)
             k = min(1.0, abs(pose["fall"]) / 90)

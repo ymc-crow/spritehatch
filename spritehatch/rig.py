@@ -228,12 +228,15 @@ class Rig:
         x, y = self.pts[key]
         return (world[bone] @ np.array([x, y, 1.0]))[:2]
 
-    def render(self, pose: dict):
-        """Draw the pose. Returns the image and the bone matrices used."""
+    def render(self, pose: dict, skip: tuple = ()):
+        """Draw the pose, leaving out the parts named in `skip`. Returns the
+        image and the bone matrices used."""
         world = self.matrices(pose)
         w, h = self.size
         out = np.zeros((h, w, 4), np.uint8)
         for name in DRAW_ORDER[self.view]:
+            if name in skip:
+                continue
             tex = self.parts[name]
             ys, xs = np.nonzero(tex[..., 3] > 0)
             if len(ys) == 0:
