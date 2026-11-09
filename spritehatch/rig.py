@@ -209,6 +209,12 @@ class Rig:
             low = max(self._lowest(world, f) for f in ("foot_r", "foot_l"))
             fix = _move(0, self.floor - low)
             world = {k: fix @ m for k, m in world.items()}
+        # The head rides on the neck but never turns: a 48px face turned even
+        # 5-10 degrees breaks its eyes and outline into stairs. Whole pixels,
+        # so it stays the exact drawing.
+        neck = np.array([*self.pts[1], 1.0])
+        x, y = (world["head"] @ neck)[:2]
+        world["head"] = _move(round(x - neck[0]), round(y - neck[1]))
         return world
 
     def _lowest(self, world, part) -> float:

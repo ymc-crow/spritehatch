@@ -987,3 +987,18 @@ def test_side_attack_strikes_forward():
             xs = np.nonzero(blade.any(axis=0))[0]
             assert xs.max() > shoulder[0] + 8 and xs.mean() > shoulder[0]
 
+
+def test_head_moves_with_the_neck_but_never_turns():
+    """A turned 48px face breaks into stairs, so the head is only moved,
+    by whole pixels, to wherever the tilted neck goes."""
+    from spritehatch.rig import Rig
+
+    img, pts = _stick_figure("down")
+    rig = Rig(img, pts, "down")
+    world = rig.matrices({"torso": -10, "head": 12})
+    head = world["head"]
+    assert np.allclose(head[:2, :2], np.eye(2))              # not turned
+    assert np.allclose(head[:2, 2], np.round(head[:2, 2]))   # whole pixels
+    neck = world["torso"] @ np.array([*rig.pts[1], 1.0])
+    assert np.abs(rig.point(world, "head", 1) - neck[:2]).max() <= 0.5
+
