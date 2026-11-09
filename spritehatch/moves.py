@@ -204,6 +204,24 @@ def death(view: str) -> list[dict]:
     ]
 
 
+# --redraw paints only 4 frames per motion (one 2x2 grid). Evenly spaced
+# picks skipped the slash itself (wind-up, then already done) and the fall,
+# so one-shot motions name the frames that tell the story.
+KEY_FRAMES = {
+    "attack": [2, 3, 4, 6],       # wind-up, slash, follow-through, recover
+    "cast": [2, 4, 5, 6],         # orb appears, full, thrown, flying
+    "death": [0, 2, 5, 7],        # hit, slump, falling, down
+}
+SIDE_KEY_FRAMES = {"death": [0, 2, 4, 7]}   # a profile is flat already at frame 5
+
+
+def key_frames(motion: str, view: str) -> list[int] | None:
+    """The 4 frames --redraw keeps, or None to space them evenly."""
+    if _side(view) or view == "left":
+        return SIDE_KEY_FRAMES.get(motion, KEY_FRAMES.get(motion))
+    return KEY_FRAMES.get(motion)
+
+
 # name: (poses, ms per frame, big canvas)
 MOTIONS = {
     "idle": (idle, 220, False),

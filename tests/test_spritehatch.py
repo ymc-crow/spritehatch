@@ -1002,3 +1002,21 @@ def test_head_moves_with_the_neck_but_never_turns():
     neck = world["torso"] @ np.array([*rig.pts[1], 1.0])
     assert np.abs(rig.point(world, "head", 1) - neck[:2]).max() <= 0.5
 
+
+def test_redraw_key_frames_keep_the_slash_and_the_fall():
+    from spritehatch.moves import MOTIONS, key_frames
+    from spritehatch.redraw import GROUP
+
+    for view in ("down", "right", "up", "left"):
+        for motion, (make, _, _) in MOTIONS.items():
+            keys = key_frames(motion, view)
+            if keys is None:
+                continue
+            poses = make("right" if view == "left" else view)
+            assert len(keys) == GROUP and all(0 <= k < len(poses) for k in keys)
+            picked = [poses[k] for k in keys]
+            if motion == "attack":
+                assert any(p.get("trail") for p in picked)
+            if motion == "death":
+                assert any(0 < abs(p.get("fall", 0)) < 90 for p in picked)
+                assert picked[-1].get("dark")

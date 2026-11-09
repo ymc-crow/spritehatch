@@ -26,7 +26,7 @@ from PIL import Image, ImageOps
 
 from . import creature as beast
 from .comfy import WORKFLOWS, ComfyClient
-from .moves import MOTIONS, render, with_effects
+from .moves import MOTIONS, key_frames, render, with_effects
 from .pixelate import preview, selout, sheet
 from .redraw import GROUP, every_nth, redraw
 
@@ -142,8 +142,12 @@ def main(argv=None) -> None:
                             effects=layers, body=body)
             # One 2x2 grid holds the whole motion, so all frames get painted
             # together and stay the same character (two grids drift apart).
-            last = name in ONE_SHOT
-            frames, pts, layers = (every_nth(x, GROUP, last) for x in (frames, pts, layers))
+            keys = key_frames(name, d)
+            if keys:
+                frames, pts, layers = ([x[k] for k in keys] for x in (frames, pts, layers))
+            else:
+                last = name in ONE_SHOT
+                frames, pts, layers = (every_nth(x, GROUP, last) for x in (frames, pts, layers))
             frames = redraw(frames, pts, still=stills[d], character=meta.get("character", ""),
                             view=d, motion=name, client=client,
                             denoise=args.denoise, seed=args.seed, model=args.model,
