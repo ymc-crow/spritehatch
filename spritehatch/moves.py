@@ -109,11 +109,11 @@ def attack(view: str) -> list[dict]:
         # following the forearm, a raised arm points it backward.
         keys = [
             {**stance, "arm_r": 30, "hand_r": 30, "arm_l": 15, "hand_l": 20},
-            {**stance, "torso": -4, "head": -2, "arm_r": 205, "hand_r": 15, "arm_l": -10,
+            {**stance, "torso": -4, "head": -2, "arm_r": 225, "hand_r": 15, "arm_l": -10,
              "blade": -135},
-            {**stance, "torso": -7, "head": -3, "arm_r": 230, "hand_r": 25, "arm_l": -25,
+            {**stance, "torso": -7, "head": -3, "arm_r": 245, "hand_r": 25, "arm_l": -25,
              "leg_r": 18, "foot_r": -15, "blade": 160},
-            {"torso": 6, "arm_r": 105, "hand_r": 10, "arm_l": 20, "leg_r": 30, "foot_r": -5,
+            {"torso": 6, "arm_r": 85, "hand_r": 10, "arm_l": 20, "leg_r": 30, "foot_r": -5,
              "leg_l": -25, "foot_l": -20, "trail": True, "blade": -30},
             {"torso": 10, "head": 3, "arm_r": 70, "hand_r": 0, "arm_l": 35, "leg_r": 34,
              "foot_r": -8, "leg_l": -30, "foot_l": -25, "trail": True, "blade": 25},
@@ -146,12 +146,14 @@ def cast(view: str) -> list[dict]:
             {},
             {"arm_r": 40, "arm_l": 35, "hand_r": 20, "hand_l": 20, "torso": -4,
              "leg_r": 10, "leg_l": -10, "ring": 120},
-            {"arm_r": 150, "arm_l": 140, "hand_r": 10, "hand_l": 10, "torso": -4, "head": -6,
+            # The orb gathers between hands held out at chest height: raised
+            # up, the near arm ran down the front of the big chibi face.
+            {"arm_r": 70, "arm_l": 60, "hand_r": 20, "hand_l": 20, "torso": -4, "head": -6,
              "leg_r": 10, "leg_l": -10, "ring": 255, "orb": (2, 0), "glow": 0.06},
-            {"arm_r": 165, "arm_l": 155, "hand_r": 5, "hand_l": 5, "torso": -5, "head": -7,
+            {"arm_r": 75, "arm_l": 65, "hand_r": 25, "hand_l": 25, "torso": -5, "head": -7,
              "leg_r": 10, "leg_l": -10, "ring": 255, "orb": (4, 0), "glow": 0.14},
-            {"arm_r": 175, "arm_l": 165, "torso": -5, "head": -7, "leg_r": 10, "leg_l": -10,
-             "ring": 255, "orb": (5, 0), "glow": 0.2},
+            {"arm_r": 75, "arm_l": 65, "hand_r": 30, "hand_l": 30, "torso": -5, "head": -7,
+             "leg_r": 10, "leg_l": -10, "ring": 255, "orb": (5, 0), "glow": 0.2},
             {"arm_r": 90, "arm_l": 85, "torso": 7, "head": 4, "leg_r": 25, "leg_l": -20,
              "foot_l": -15, "ring": 180, "orb": (4, 14), "glow": 0.08},
             {"arm_r": 80, "arm_l": 75, "torso": 6, "head": 3, "leg_r": 22, "leg_l": -18,
@@ -303,8 +305,11 @@ def _magic(rig: Rig, world: dict, view: str, pose: dict, i: int):
         elif travel:
             center = (hands[0] + fxd * (3 * k + travel), hands[1] + fyd * travel - radius)
         else:
-            x = mark[0] if view == "up" else hands[0] + fxd * 3 * k
-            center = (x, min(hands[1] - radius, above))
+            if view == "up":
+                center = (mark[0], min(hands[1] - radius, above))
+            else:
+                # a profile holds it out in front, clear of the face
+                center = (hands[0] + 3 * k + radius, hands[1] - radius)
         d = ImageDraw.Draw(back if view == "up" else front)
         if travel:
             d.line([(center[0] - fxd * travel, center[1] - fyd * travel), center],

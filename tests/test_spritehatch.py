@@ -1049,3 +1049,33 @@ def test_redraw_knows_a_tipped_body():
     pts[1] = (20, 12)                                 # neck far to the side
     assert _standing(pts) is False
     assert _standing([None] * 18) is None
+
+
+def test_arms_stay_off_the_face():
+    """Arms drawn in front of the head must not cover the face (the lower two
+    thirds of the head; in a profile its front half)."""
+    from PIL import ImageDraw
+
+    from spritehatch.moves import MOTIONS, canvas_size, make_rig
+
+    arms = ("arm_r", "hand_r", "arm_l", "hand_l")
+    for view in ("down", "right"):
+        still, pts = _stick_figure(view, 80)
+        # a chibi head: about 40% of the body, reaching ahead in a profile
+        nx, ny = pts[1]
+        ahead = 5 if view == "right" else 0
+        ImageDraw.Draw(still).ellipse((nx - 15 + ahead, ny - 30, nx + 15 + ahead, ny - 1),
+                                      fill=(90, 90, 200, 255))
+        rig = make_rig(still, pts, view, canvas_size(80))
+        ys, xs = np.nonzero(rig.parts["head"][..., 3] > 0)
+        keep = ys >= ys.min() + (ys.max() - ys.min()) // 3
+        if view == "right":
+            keep &= xs >= (xs.min() + xs.max()) // 2
+        for motion in ("idle", "walk", "attack", "cast"):
+            for pose in MOTIONS[motion][0](view):
+                full, world = rig.render(pose)
+                bare = rig.render(pose, skip=arms)[0]
+                dx, dy = world["head"][:2, 2].astype(int)
+                covered = (np.asarray(full) != np.asarray(bare)).any(-1)
+                hits = covered[ys[keep] + dy, xs[keep] + dx].sum()
+                assert hits <= 2, (view, motion, pose, hits)
