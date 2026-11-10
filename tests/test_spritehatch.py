@@ -1079,3 +1079,60 @@ def test_arms_stay_off_the_face():
                 covered = (np.asarray(full) != np.asarray(bare)).any(-1)
                 hits = covered[ys[keep] + dy, xs[keep] + dx].sum()
                 assert hits <= 2, (view, motion, pose, hits)
+
+
+def _face_cell(shine=True):
+    """A big front-view drawing: skin head with two dark eyes (white dot in
+    each), a small red mouth, hair touching the eyes' sides, a body below."""
+    from PIL import ImageDraw
+
+    from spritehatch.pose import keypoints
+
+    w, h = 192, 320
+    img = Image.new("RGB", (w, h), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    k = keypoints("down")
+    (lx, ly), (rx, _) = [(k[i][0] * w, k[i][1] * h + 14) for i in (14, 15)]
+    cx = (lx + rx) / 2
+    d.ellipse((cx - 50, ly - 60, cx + 50, ly + 40), fill=(250, 210, 170))   # head
+    d.rectangle((cx - 40, ly + 40, cx + 40, h - 10), fill=(60, 90, 200))    # body
+    for x in (lx, rx):
+        d.ellipse((x - 5, ly - 9, x + 5, ly + 9), fill=(10, 10, 10))
+        if shine:
+            d.rectangle((x - 3, ly - 6, x - 1, ly - 4), fill=(255, 255, 255))
+    d.rectangle((cx - 5, ly + 22, cx + 5, ly + 24), fill=(200, 60, 60))     # mouth
+    return img
+
+
+def test_eyes_and_mouth_are_painted_back_after_the_shrink():
+    from spritehatch.face import fix_faces
+    from spritehatch.pixelate import downscale_sprites
+
+    cell = _face_cell()
+    plain = downscale_sprites([cell], size=48)
+    fixed = fix_faces([cell], plain, ["down"])[0]
+    a = np.asarray(fixed)
+    solid = np.pad(a[..., 3] > 0, 1)
+    inside = solid[1:-1, 1:-1] & solid[:-2, 1:-1] & solid[2:, 1:-1] & solid[1:-1, :-2] & solid[1:-1, 2:]
+    dark = inside & (a[..., :3].astype(int) @ [0.3, 0.59, 0.11] < 40)   # not the outline
+    white = (a[..., 3] > 0) & (a[..., :3] == 255).all(-1)
+    red = (a[..., 3] > 0) & (a[..., 0].astype(int) - a[..., 1] > 60)
+    xs = np.nonzero(dark)[1]
+    left, right = xs < xs.mean(), xs >= xs.mean()
+    assert left.sum() == right.sum() > 0                    # two eyes, one size
+    assert white.sum() == 2                                 # a highlight in each
+    assert red.any()                                        # a mouth
+    assert fixed.info["place"] == plain[0].info["place"]
+
+
+def test_eyes_are_left_alone_when_not_found():
+    from spritehatch.face import fix_faces
+    from spritehatch.pixelate import downscale_sprites
+
+    cell = Image.new("RGB", (192, 320), (255, 255, 255))
+    from PIL import ImageDraw
+    ImageDraw.Draw(cell).rectangle((60, 40, 130, 300), fill=(60, 90, 200))
+    plain = downscale_sprites([cell], size=48)
+    assert np.array_equal(np.asarray(fix_faces([cell], plain, ["down"])[0]),
+                          np.asarray(plain[0]))
+    assert fix_faces([cell], plain, ["up"])[0] is plain[0]  # no face from behind

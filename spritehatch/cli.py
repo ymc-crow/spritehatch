@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .comfy import ComfyClient, turnaround_workflow, zimage_turnaround_workflow
+from .face import fix_faces
 from .pixelate import (
     LUMA,
     background_mask,
@@ -205,6 +206,9 @@ def build(raw: Image.Image, mode: str, size: int, colors: int, out: Path,
             scores = guide_match(cells, guide, spec["draw"])
         sprites = downscale_sprites(cells, colors=colors,
                                     size=size or (BOSS_SIZE if boss else 48), glow=boss)
+        if not creature:
+            # The shrink melts the eyes; paint them back from the drawing.
+            sprites = fix_faces(cells, sprites, spec["draw"], body)
     drawn = dict(zip(spec["draw"], sprites))
     skeletons = {v: _skeleton(v, i, count, raw, snapped, s, body)
                  for i, (v, s) in enumerate(zip(spec["draw"], sprites))}
