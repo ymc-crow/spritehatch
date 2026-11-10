@@ -56,6 +56,8 @@ def find_eyes(rgb: np.ndarray, box, count: int, min_size: int = 12) -> list:
         ys, xs = np.nonzero(label == k)
         if ys.min() == 0 or xs.min() == 0 or ys.max() == h - 1 or xs.max() == w - 1:
             continue
+        if ys.max() - ys.min() + 1 < 0.7 * (xs.max() - xs.min() + 1):
+            continue                      # flat: a brow, a rim, not an eye
         blobs.append((int(sizes[k]), (xs.min() + x0, ys.min() + y0,
                                       xs.max() + 1 + x0, ys.max() + 1 + y0)))
     if count == 1:
@@ -103,10 +105,20 @@ def paint_eyes(sprite: Image.Image, rgb: np.ndarray, eyes: list, box) -> Image.I
     solid = face[face[..., 3] > 0][:, :3]
     if not len(solid):
         return sprite
-    keys, counts = np.unique(solid, axis=0, return_counts=True)
-    skin = keys[counts.argmax()]
-    big = rgb[box[1]:box[3], box[0]:box[2]].astype(float) @ LUMA
-    skin_lum = np.median(big)
+    # The skin is what lies between the two eyes (the bridge of the nose) or,
+    # for one eye, just below it: the face box also holds hair and helmet,
+    # often more of them than skin.
+    a, b = eyes[0], eyes[-1]
+    if len(eyes) == 2:
+        patch = rgb[a[1]:a[3], a[2]:b[0]]
+    else:
+        patch = rgb[a[3]:a[3] + (a[3] - a[1]), a[0]:a[2]]
+    if not patch.size:
+        return sprite
+    raw_skin = np.median(patch.reshape(-1, 3), axis=0)
+    keys = np.unique(solid, axis=0)
+    skin = keys[((keys.astype(float) - raw_skin) ** 2).sum(1).argmin()]
+    skin_lum = float(raw_skin @ LUMA)
 
     # Both eyes are painted the same: one size, one set of colors (the model
     # draws a pair; small differences in the drawing would read as a squint).
@@ -118,6 +130,15 @@ def paint_eyes(sprite: Image.Image, rgb: np.ndarray, eyes: list, box) -> Image.I
     shine = all(s for _, _, s in looks)
     ew = int(np.clip(round(np.mean([(e[2] - e[0]) * scale for e in eyes])), 1, 2))
     eh = int(np.clip(round(np.mean([(e[3] - e[1]) * scale for e in eyes])), 2, 3))
+    # First wipe the smudges the vote made of the eyes: one left 2 pixels wide
+    # beside a new 1-pixel eye made the pair look mismatched.
+    for eye in eyes:
+        sx0, sy0 = to_sprite(eye[0], eye[1])
+        sx1, sy1 = to_sprite(eye[2], eye[3])
+        ys, xs = slice(int(sy0), int(np.ceil(sy1))), slice(int(sx0), int(np.ceil(sx1)))
+        spot = out[ys, xs]
+        dark = (spot[..., 3] > 0) & (spot[..., :3] @ LUMA < 0.5 * (skin @ LUMA))
+        spot[dark, :3] = skin
     for eye in eyes:
         sx0, sy0 = to_sprite(eye[0], eye[1])
         sx1, sy1 = to_sprite(eye[2], eye[3])
