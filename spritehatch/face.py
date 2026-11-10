@@ -130,6 +130,16 @@ def paint_eyes(sprite: Image.Image, rgb: np.ndarray, eyes: list, box) -> Image.I
     shine = all(s for _, _, s in looks)
     ew = int(np.clip(round(np.mean([(e[2] - e[0]) * scale for e in eyes])), 1, 2))
     eh = int(np.clip(round(np.mean([(e[3] - e[1]) * scale for e in eyes])), 2, 3))
+    # A pair seen from the front gets the pixel-art eye hand-made sprites use
+    # (a copy of the model's dark oval reads as two dots): 2x3, a dark lash
+    # row on top, a white catch light and the iris below. A plain black eye
+    # gets a dark warm brown iris.
+    centers = [((e[0] + e[2]) / 2 - x0) * scale for e in eyes]
+    styled = len(eyes) == 2 and abs(centers[1] - centers[0]) >= 5
+    if styled:
+        ew, eh = 2, 3
+        if iris is None:
+            iris = (skin.astype(float) * 0.38).round().astype(np.uint8)
     # First wipe the smudges the vote made of the eyes: one left 2 pixels wide
     # beside a new 1-pixel eye made the pair look mismatched.
     for eye in eyes:
@@ -152,6 +162,10 @@ def paint_eyes(sprite: Image.Image, rgb: np.ndarray, eyes: list, box) -> Image.I
             _skin_back(out, rgb, x, cy + eh, scale, x0, y0, left, top, skin, skin_lum)
         out[cy:cy + eh, cx:cx + ew, :3] = pupil
         out[cy:cy + eh, cx:cx + ew, 3] = 255
+        if styled:
+            out[cy + 1:cy + 3, cx:cx + 2, :3] = iris
+            out[cy + 1, cx, :3] = 255
+            continue
         if iris is not None and eh >= 3:
             out[cy + eh - 1, cx:cx + ew, :3] = iris
         if shine and ew >= 2:
