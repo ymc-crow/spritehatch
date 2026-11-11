@@ -99,7 +99,8 @@ def flap(still: Image.Image, view: str, amount: float) -> Image.Image:
     if found is None or not amount:
         return still
     cx, half, shoulder = found
-    return Image.fromarray(_lift(a, range(shoulder + 1), cx, half, view, amount))
+    return Image.fromarray(_lift(a, range(shoulder + 1), cx, half, _profile(still, view),
+                                 amount))
 
 
 def wag(still: Image.Image, view: str, amount: float) -> Image.Image:
@@ -112,7 +113,37 @@ def wag(still: Image.Image, view: str, amount: float) -> Image.Image:
         return still
     _, _, waist, x0, x1 = found
     return Image.fromarray(_lift(a, range(waist, a.shape[0]), (x0 + x1 + 1) / 2,
-                                 (x1 - x0 + 1) / 2, view, amount))
+                                 (x1 - x0 + 1) / 2, _profile(still, view), amount))
+
+
+def _profile(still: Image.Image, view: str) -> str:
+    """The view a profile really shows ("right" when the head is on the
+    right), so wings and tail move on the back side, never the head."""
+    if view not in ("left", "right"):
+        return view
+    return "right" if facing(still, view)[0] > 0 else "left"
+
+
+def facing(still: Image.Image, view: str) -> tuple[int, int]:
+    """Which way a view moves forward (x, y). A profile goes where the head
+    is, not where the view's name says: the model sometimes draws the right
+    view facing left, and the lunge went out of its back. The head side has
+    more of the top half (head, ears, horns), the back side more of the
+    bottom (tail, hind legs); a round body that shows neither keeps the
+    view's own way."""
+    fx_, fy = FORWARD[view]
+    if not fx_:
+        return fx_, fy
+    a = np.asarray(still.convert("RGBA"))[..., 3] > 0
+    ys, xs = np.nonzero(a)
+    if not len(xs):
+        return fx_, fy
+    y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
+    h, w, mid = y1 - y0 + 1, x1 - x0 + 1, (x0 + x1) / 2
+    top = xs[ys < y0 + h * 0.5].mean() - mid
+    bottom = xs[ys >= y0 + h * 0.7].mean() - mid
+    lean = (top - bottom) / w
+    return (fx_ if abs(lean) < 0.02 else (1 if lean > 0 else -1)), 0
 
 
 def idle(still: Image.Image, view: str) -> list[Image.Image]:
@@ -125,7 +156,7 @@ def idle(still: Image.Image, view: str) -> list[Image.Image]:
 
 def walk(still: Image.Image, view: str) -> list[Image.Image]:
     s = canvas_size(still.width)          # room to hop
-    fx_, fy = FORWARD[view]
+    fx_, fy = facing(still, view)
     k = still.width / 48                  # hop sizes are for a 48px frame
     hop = [  # (sx, sy, forward, up)
         (1.08, 0.9, 0, 0),
@@ -142,7 +173,7 @@ def walk(still: Image.Image, view: str) -> list[Image.Image]:
 
 def attack(still: Image.Image, view: str) -> list[Image.Image]:
     s = canvas_size(still.width)
-    fx_, fy = FORWARD[view]
+    fx_, fy = facing(still, view)
     reach = still.width // 8
 
     def at(sx, sy, f):
@@ -160,7 +191,7 @@ def attack(still: Image.Image, view: str) -> list[Image.Image]:
 
 def death(still: Image.Image, view: str) -> list[Image.Image]:
     s = canvas_size(still.width)
-    fx_, _ = FORWARD[view]
+    fx_, _ = facing(still, view)
     back = -fx_ if fx_ else 1             # falls away from where it faces
     stand = _place(still, s)
     floor = fx.box(stand)[3]

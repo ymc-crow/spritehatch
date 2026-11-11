@@ -1136,3 +1136,31 @@ def test_eyes_are_left_alone_when_not_found():
     assert np.array_equal(np.asarray(fix_faces([cell], plain, ["down"])[0]),
                           np.asarray(plain[0]))
     assert fix_faces([cell], plain, ["up"])[0] is plain[0]  # no face from behind
+
+
+def _beast(faces="left", size=48):
+    """A profile creature: a big head up front, a body, a thin tail low behind."""
+    from PIL import ImageDraw
+
+    img = Image.new("RGBA", (size, size))
+    d = ImageDraw.Draw(img)
+    d.ellipse((8, 8, 26, 26), fill=(200, 60, 40, 255))            # head
+    d.rectangle((14, 22, 34, 40), fill=(200, 60, 40, 255))        # body
+    d.rectangle((34, 36, 44, 39), fill=(200, 60, 40, 255))        # tail
+    d.rectangle((15, 40, 18, 46), fill=(120, 30, 20, 255))        # legs
+    d.rectangle((30, 40, 33, 46), fill=(120, 30, 20, 255))
+    return img if faces == "left" else img.transpose(Image.FLIP_LEFT_RIGHT)
+
+
+def test_creature_profile_attacks_toward_its_head():
+    """The model sometimes draws the right view facing left: the lunge goes
+    where the head is, not always to the right."""
+    from spritehatch import creature
+    from spritehatch.effects import box
+
+    for faces, sign in (("left", -1), ("right", 1)):
+        frames = creature.render(_beast(faces), "right", "attack")
+        x0, _, x1, _ = box(frames[0])
+        l0, _, l1, _ = box(frames[2])
+        assert sign * ((l0 + l1) - (x0 + x1)) > 0, faces
+
