@@ -1164,3 +1164,21 @@ def test_creature_profile_attacks_toward_its_head():
         l0, _, l1, _ = box(frames[2])
         assert sign * ((l0 + l1) - (x0 + x1)) > 0, faces
 
+
+def test_long_creature_dies_lying_down_not_standing_up():
+    """Turned 90 degrees a long four-legged body stood on its tail."""
+    from PIL import ImageDraw
+
+    from spritehatch import creature
+    from spritehatch.effects import box
+
+    img = Image.new("RGBA", (96, 96))
+    d = ImageDraw.Draw(img)
+    d.rectangle((10, 50, 86, 74), fill=(90, 90, 100, 255))        # long body
+    d.ellipse((74, 40, 92, 60), fill=(90, 90, 100, 255))          # head
+    for x in (16, 30, 62, 76):
+        d.rectangle((x, 74, x + 4, 90), fill=(60, 60, 70, 255))   # legs
+    frames = creature.render(img, "right", "death")
+    x0, y0, x1, y1 = box(frames[-1])
+    assert x1 - x0 > y1 - y0
+    assert y1 == box(frames[0])[3]                  # on the floor, not floating

@@ -203,6 +203,16 @@ def death(still: Image.Image, view: str) -> list[Image.Image]:
     m = s // 2
     big = Image.new("RGBA", (2 * s, 2 * s))
     big.alpha_composite(stand, (m, m))
+    _, y0, _, _ = fx.box(stand)
+    if x1 - x0 > 1.3 * (floor - y0):
+        # A long four-legged body turned 90 degrees stood up on its tail.
+        # It rolls onto its back instead: tips a little, then lies belly up
+        # with the head still on its own side.
+        tip = fx.ground(fx.rotate(big, -20 * back, (pivot[0] + m, pivot[1] + m)),
+                        floor + m, s).crop((m, m, m + s, m + s))
+        flat = fx.ground(_place(still.transpose(Image.FLIP_TOP_BOTTOM), s, 1.0, 0.9),
+                         floor - 1, (x0 + x1) / 2)
+        return out + [tip, flat, flat, fx.darken(flat, 0.5)]
     for deg in (35, 70, 90):
         # Positive turns counterclockwise: the head goes left.
         lying = fx.ground(fx.rotate(big, -deg * back, (pivot[0] + m, pivot[1] + m)),
